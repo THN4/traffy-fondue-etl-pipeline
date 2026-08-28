@@ -37,6 +37,32 @@ services:
       - pgadmin_data:/var/lib/pgadmin
     networks:
       - traffy-network
+  
+  airflow:
+    image: apache/airflow:2.9.3-python3.11
+    container_name: traffy_airflow
+    restart: unless-stopped
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False  
+      - AIRFLOW__CORE__DEFAULT_TIMEZONE=Asia/Bangkok 
+      - PYTHONPATH=/opt/airflow  
+      - _AIRFLOW_DB_MIGRATE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    ports:
+      - "8088:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags        # ผูกโฟลเดอร์ dags ในเครื่องเข้ากับ Airflow
+      - ./scripts:/opt/airflow/scripts  # ผูกโฟลเดอร์ scripts เพื่อให้ DAG ดึงฟังก์ชันไปรันได้
+      - ./sql:/opt/airflow/sql
+      - ./.env:/opt/airflow/.env
+    command: standalone
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - traffy-network
 
 volumes:
   postgres_data:
