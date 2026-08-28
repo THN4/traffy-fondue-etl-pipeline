@@ -1,0 +1,101 @@
+// Database Markup Language (DBML) for Traffy Fondue Data Pipeline
+// Can be visualized directly at https://dbdiagram.io
+
+Table dim_problem_type {
+  type_id integer [pk, increment, note: 'Primary Key']
+  full_type varchar(255) [unique, not null, note: 'ข้อความประเภทปัญหาเดิมเต็ม']
+  main_category varchar(100) [not null, note: 'หมวดหมู่หลัก (Level 1)']
+  sub_category varchar(150) [note: 'หมวดหมู่ย่อย (Level 2)']
+  detail_category text [note: 'รายละเอียดประเภทปัญหา (Level 3)']
+
+  Note: 'ตารางมิติประเภทปัญหา (Hierarchical Taxonomy)'
+}
+
+Table dim_location {
+  location_id integer [pk, increment, note: 'Primary Key']
+  subdistrict varchar(100) [not null, note: 'แขวง / ตำบล']
+  district varchar(100) [not null, note: 'เขต / อำเภอ']
+  province varchar(100) [not null, note: 'จังหวัด']
+
+  indexes {
+    (subdistrict, district, province) [unique]
+  }
+
+  Note: 'ตารางมิติสถานที่และเขตการปกครอง'
+}
+
+Table dim_organizations {
+  org_id integer [pk, increment, note: 'Primary Key']
+  org_name varchar(255) [unique, not null, note: 'ชื่อหน่วยงาน']
+
+  Note: 'ตารางมิติรายชื่อหน่วยงานที่รับผิดชอบ'
+}
+
+Table fact_tickets {
+  ticket_id varchar(50) [pk, note: 'รหัสเรื่องแจ้ง (Unique Identifier)']
+  message_id bigint [note: 'รหัสข้อความจากแชท/ระบบ']
+  type_id integer [not null, note: 'FK -> dim_problem_type']
+  location_id integer [not null, note: 'FK -> dim_location']
+  state varchar(50) [not null, note: 'สถานะเรื่อง (เสร็จสิ้น, กำลังดำเนินการ, รอรับเรื่อง)']
+  tags text [note: 'แท็กประเภทปัญหาเพิ่มเติม (กรณีต่างจาก type)']
+  star decimal(2,1) [note: 'คะแนนความพึงพอใจจากประชาชน (1.0 - 5.0)']
+  count_reopen integer [default: 0, note: 'จำนวนครั้งที่มีการเปิดเคสซ้ำ']
+  is_internal_rework boolean [default: false, note: 'เคสที่ถูกดึงกลับมาแก้ไขภายใน']
+  comment text [note: 'ข้อความร้องเรียนจากประชาชน']
+  address text [note: 'ที่อยู่ข้อความเต็ม']
+  longitude decimal(9,6) [note: 'พิกัดลองจิจูด']
+  latitude decimal(8,6) [note: 'พิกัดละติจูด']
+  photo_url text [note: 'URL รูปภาพก่อนดำเนินการ']
+  photo_after_url text [note: 'URL รูปภาพหลังดำเนินการ']
+  
+  // Timestamps
+  timestamp timestamp [not null, note: 'เวลาที่ประชาชนแจ้งเรื่อง']
+  timestamp_inprogress timestamp [note: 'เวลาที่เจ้าหน้าที่เริ่มรับเรื่อง']
+  timestamp_finished timestamp [note: 'เวลาที่ปิดงานเสร็จสิ้น']
+  last_activity timestamp [note: 'เวลาที่มีความเคลื่อนไหวล่าสุด']
+  
+  // Durations & Metrics
+  duration_minutes_total decimal(12,2) [note: 'เวลารวมตั้งแต่แจ้งจนเสร็จ (นาที)']
+  calculated_from_start decimal(12,2) [note: 'เวลาคำนวณจริงจาก timestamp แจ้ง (นาที)']
+  calculated_from_inprogress decimal(12,2) [note: 'เวลาทำงานจริงของเจ้าหน้าที่ (นาที)']
+  
+  // Summary Organization Features
+  primary_org_id integer [note: 'FK -> dim_organizations (หน่วยงานแรก)']
+  latest_action_org_id integer [note: 'FK -> dim_organizations (หน่วยงานล่าสุด)']
+  org_count integer [default: 1, note: 'จำนวนหน่วยงานทั้งหมดที่เกี่ยวข้อง']
+
+  indexes {
+    timestamp
+    state
+    type_id
+    location_id
+  }
+
+  Note: 'ตารางข้อเท็จจริงหลักของการรับแจ้งเรื่องร้องเรียน'
+}
+
+Table ticket_organizations {
+  ticket_id varchar(50) [not null, note: 'FK -> fact_tickets']
+  org_id integer [not null, note: 'FK -> dim_organizations']
+  sequence_order integer [not null, note: 'ลำดับการเข้าร่วมของหน่วยงาน (1, 2, 3...)']
+  is_primary boolean [default: false, note: 'เป็นหน่วยงานแรกที่รับเรื่องหรือไม่']
+  is_latest_actor boolean [default: false, note: 'เป็นหน่วยงานล่าสุดที่ลงมือปฏิบัติงานหรือไม่']
+
+  indexes {
+    (ticket_id, org_id) [pk]
+    org_id
+    ticket_id
+  }
+
+  Note: 'ตารางเชื่อม Many-to-Many สำหรับประวัติหน่วยงานที่เกี่ยวข้องในแต่ละเรื่อง'
+}
+
+// Relationships (Foreign Keys)
+Ref: fact_tickets.type_id > dim_problem_type.type_id
+Ref: fact_tickets.location_id > dim_location.location_id
+Ref: fact_tickets.primary_org_id > dim_organizations.org_id
+Ref: fact_tickets.latest_action_org_id > dim_organizations.org_id
+
+Ref: ticket_organizations.ticket_id > fact_tickets.ticket_id [delete: cascade]
+Ref: ticket_organizations.org_id > dim_organizations.org_id
+

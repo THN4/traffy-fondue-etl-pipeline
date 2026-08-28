@@ -33,19 +33,12 @@ def transform_traffy_data(df: pd.DataFrame) -> pd.DataFrame:
     df_clean = check_problemtype_tag(df_clean)
 
     # Step 2: Parse 'type' hierarchy
-    type_split = df_clean["type"].fillna("").str.split("->", expand=True)
-    level_names = ["main_category", "sub_category", "detail_category"]
-    col_names = [
-        level_names[i] if i < len(level_names) else f"sub_category_{i}"
-        for i in range(type_split.shape[1])
-    ]
-    type_split.columns = col_names
-
-    for col in type_split.columns:
-        type_split[col] = type_split[col].str.strip().replace("", "None").fillna("None")
-
-    df_clean = pd.concat([df_clean, type_split], axis=1)
-    print(f"Step 2: Parsed 'type' hierarchy into {list(type_split.columns)}.")
+    split_df = df_clean["type"].fillna("").str.split("->", n=2, expand=True)
+    
+    df_clean["main_category"] = split_df[0].str.strip().replace("", "None").fillna("None")
+    df_clean["sub_category"] = split_df[1].str.strip().replace("", "None").fillna("None") if split_df.shape[1] > 1 else "None"
+    df_clean["detail_category"] = split_df[2].str.strip().replace("", "None").fillna("None") if split_df.shape[1] > 2 else "None"
+    print(f"Step 2: Parsed 'type' hierarchy into {list(split_df.columns)}.")
 
     # Step 3: Fill Missing Values
     df_clean["comment"] = df_clean["comment"].fillna("Not specified")

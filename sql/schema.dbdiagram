@@ -1,0 +1,46 @@
+{
+  "version": "3.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "currentViewName": null,
+  "defaultView": {
+    "detailLevel": "All",
+    "relationshipMode": "All",
+    "tablePositions": [
+      {
+        "name": "dim_problem_type",
+        "schemaName": "public",
+        "x": 12,
+        "y": 12
+      },
+      {
+        "name": "dim_location",
+        "schemaName": "public",
+        "x": 12,
+        "y": 250
+      },
+      {
+        "name": "dim_organizations",
+        "schemaName": "public",
+        "x": 1192.56337890625,
+        "y": 245.0870525695691
+      },
+      {
+        "name": "fact_tickets",
+        "schemaName": "public",
+        "x": 571.2939453125,
+        "y": 12
+      },
+      {
+        "name": "ticket_organizations",
+        "schemaName": "public",
+        "x": 1192.79443359375,
+        "y": 12
+      }
+    ],
+    "tableGroupCollapseStates": [],
+    "stickyNoteLayouts": [],
+    "referencePaths": []
+  },
+  "views": {}
+}
