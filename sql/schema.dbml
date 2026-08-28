@@ -37,6 +37,7 @@ Table fact_tickets {
   type_id integer [not null, note: 'FK -> dim_problem_type']
   location_id integer [not null, note: 'FK -> dim_location']
   state varchar(50) [not null, note: 'สถานะเรื่อง (เสร็จสิ้น, กำลังดำเนินการ, รอรับเรื่อง)']
+  tags text [note: 'แท็กประเภทปัญหาเพิ่มเติม (กรณีต่างจาก type)']
   star decimal(2,1) [note: 'คะแนนความพึงพอใจจากประชาชน (1.0 - 5.0)']
   count_reopen integer [default: 0, note: 'จำนวนครั้งที่มีการเปิดเคสซ้ำ']
   is_internal_rework boolean [default: false, note: 'เคสที่ถูกดึงกลับมาแก้ไขภายใน']
