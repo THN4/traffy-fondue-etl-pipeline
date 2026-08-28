@@ -50,6 +50,8 @@ services:
       - _AIRFLOW_WWW_USER_CREATE=true
       - _AIRFLOW_WWW_USER_USERNAME=admin
       - _AIRFLOW_WWW_USER_PASSWORD=admin
+      - POSTGRES_HOST=postgres  # บอกให้ Airflow คุยกับ Container postgres
+      - POSTGRES_PORT=5432      # พอร์ตภายในของ Postgres
     ports:
       - "8088:8080"
     volumes:
