@@ -59,7 +59,7 @@ services:
       - ./scripts:/opt/airflow/scripts  # ผูกโฟลเดอร์ scripts เพื่อให้ DAG ดึงฟังก์ชันไปรันได้
       - ./sql:/opt/airflow/sql
       - ./.env:/opt/airflow/.env
-    command: standalone
+    command: bash -c "rm -f /opt/airflow/airflow-webserver.pid && airflow standalone"
     depends_on:
       postgres:
         condition: service_healthy
