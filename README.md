@@ -125,38 +125,38 @@ During exploratory analysis, several real-world data quality anomalies were iden
 To optimize analytical queries and dashboard performance, the database is structured into a **Star Schema**:
 
 ```text
-                               +-----------------------+
-                               |   dim_problem_type    |
-                               +-----------------------+
-                               | PK  type_id           |
-                               |     main_category     |
-                               |     sub_category      |
-                               |     detail_category   |
-                               +-----------+-----------+
-                                           | 1
-                                           |
-                                           | N
-                 +--------------------+     |     +-------------------------+     1     +------------------+
-                 |    dim_location    |-----+----->      fact_tickets       |<----------| dim_organizations|
-                 +--------------------+     |     +-------------------------+           +------------------+
-                 | PK  location_id    |     |     | PK  ticket_id           |           | PK  org_id       |
-                 |     subdistrict    |     |     | FK  type_id             |           |     org_name     |
-                 |     district       |     |     | FK  location_id         |           +--------+---------+
-                 |     province       |     |     | FK  primary_org_id      |                    | 1
-                 +--------------------+     |     | FK  latest_action_org_id|                    |
-                                            |     |     state, timestamp... |                    |
-                                            |     +-------------------------+                    |
-                                            |                                                    |
-                                            |                                                    | N
-                                            |             +-----------------------+              |
-                                            +------------>|  ticket_organizations |<-------------+
-                                                          +-----------------------+
-                                                          | PK,FK1  ticket_id     |
-                                                          | PK,FK2  org_id        |
-                                                          |         sequence_order|
-                                                          |         is_primary    |
-                                                          |         is_latest     |
-                                                          +-----------------------+
+               +-----------------------+
+               |   dim_problem_type    |
+               +-----------------------+
+               | PK  type_id           |
+               |     main_category     |
+               |     sub_category      |
+               |     detail_category   |
+               +-----------+-----------+
+                           | 1
+                           |
+                           | N
++--------------------+     |     +-------------------------+     1     +------------------+
+|    dim_location    |-----+----->      fact_tickets       |<----------| dim_organizations|
++--------------------+     |     +-------------------------+           +------------------+
+| PK  location_id    |     |     | PK  ticket_id           |           | PK  org_id       |
+|     subdistrict    |     |     | FK  type_id             |           |     org_name     |
+|     district       |     |     | FK  location_id         |           +--------+---------+
+|     province       |     |     | FK  primary_org_id      |                    | 1
++--------------------+     |     | FK  latest_action_org_id|                    |
+                           |     |     state, timestamp... |                    |
+                           |     +-------------------------+                    |
+                           |                                                    |
+                           |                                                    | N
+                           |             +-----------------------+              |
+                           +------------>|  ticket_organizations |<-------------+
+                                         +-----------------------+
+                                         | PK,FK1  ticket_id     |
+                                         | PK,FK2  org_id        |
+                                         |         sequence_order|
+                                         |         is_primary    |
+                                         |         is_latest     |
+                                         +-----------------------+
 ```
 
 ### Table Dictionary:
