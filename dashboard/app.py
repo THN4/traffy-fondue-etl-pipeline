@@ -1,17 +1,17 @@
-# --- Imports & Path Setup ---
 import sys
 from pathlib import Path
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+# Add project root directory to sys.path for relative imports
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 from scripts.db import engine
 
-# --- Page Configuration ---
+# Page Configuration
 st.set_page_config(
     page_title="Traffy Fondue Analytics Dashboard",
     layout="wide"
@@ -20,10 +20,10 @@ st.set_page_config(
 st.title("Traffy Fondue Analytics Dashboard")
 st.markdown("ระบบสรุปภาพรวมและวิเคราะห์ข้อมูลเรื่องร้องเรียนเมือง กรุงเทพมหานคร")
 
-# --- Cached Data Loading Functions ---
+# Cached Data Loading Functions
 @st.cache_data
 def load_summary_data():
-    """ดึงข้อมูล Fact และ Location เพื่อทำ Visualization สรุปภาพรวม"""
+    """Extract fact and location data for high-level summary visualizations."""
     query = """
         SELECT 
             f.ticket_id,
@@ -36,20 +36,20 @@ def load_summary_data():
 
 @st.cache_data
 def load_table_data(table_name: str):
-    """ดึงข้อมูลตารางที่เลือกแบบจำกัดจำนวนเพื่อความเร็ว"""
+    """Extract limited records from target table for data explorer performance."""
     limit_clause = " LIMIT 1000" if table_name == "fact_tickets" else ""
     query = f"SELECT * FROM {table_name}{limit_clause}"
     return pd.read_sql(query, engine)
 
-# โหลดข้อมูลสรุปภาพรวม
+# Load summary dataset
 summary_df = load_summary_data()
 
 # ==========================================
-# SECTION 1: VISUALIZATION SUMMARY (ภาพรวมข้อมูล)
+# SECTION 1: VISUALIZATION SUMMARY
 # ==========================================
 st.header("สรุปภาพรวมเรื่องร้องเรียน")
 
-# --- 1.1 KPI Metric Cards ---
+# 1.1 KPI Metric Cards
 total_cases = len(summary_df)
 finished_cases = len(summary_df[summary_df["state"] == "เสร็จสิ้น"])
 inprogress_cases = len(summary_df[summary_df["state"] == "กำลังดำเนินการ"])
@@ -64,7 +64,7 @@ col4.metric("รอรับเรื่อง / อื่นๆ", f"{pending_ca
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 1.2 Charts Layout (2 Columns) ---
+# 1.2 Charts Layout (2 Columns)
 chart_col1, chart_col2 = st.columns(2)
 
 with chart_col1:
@@ -109,7 +109,7 @@ with chart_col2:
     st.plotly_chart(fig_district, use_container_width=True)
 
 # ==========================================
-# SECTION 2: RAW DATA EXPLORER (สำรวจตารางข้อมูล)
+# SECTION 2: RAW DATA EXPLORER
 # ==========================================
 st.divider()
 st.header("สำรวจข้อมูลในฐานข้อมูล (Data Explorer)")

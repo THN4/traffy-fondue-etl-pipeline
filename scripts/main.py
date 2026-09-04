@@ -8,9 +8,16 @@ from scripts.transform import transform_traffy_data
 from scripts.db import test_connection, init_db_schema
 from scripts.load import load_traffy_data
 
-
 def run_pipeline(target_month: str = None):
+    """
+    Execute end-to-end Traffy Fondue ETL pipeline.
+    
+    Args:
+        target_month (str, optional): Target month in 'YYYY-MM' format (e.g., '2026-07').
+                                       If omitted, defaults to the previous calendar month.
+    """
     if not target_month:
+        # Dynamically compute previous calendar month if target_month is unspecified
         prev_month = datetime.now() - relativedelta(months=1)
         target_month = prev_month.strftime("%Y-%m")
         
@@ -24,17 +31,17 @@ def run_pipeline(target_month: str = None):
     start_time = time.time()
     
     try:
-        # Step 1: Database Healthcheck & Schema Init
+        # Step 1: Healthcheck & Schema Initialization
         test_connection()
         init_db_schema()
         
-        # Step 2: Extract
+        # Step 2: Extraction
         raw_df = extract_traffy_data(file_name)
         
-        # Step 3: Transform
+        # Step 3: Transformation & Feature Engineering
         clean_df = transform_traffy_data(raw_df)
         
-        # Step 4: Load & Upsert
+        # Step 4: Loading & Dimensional Upsert
         load_traffy_data(clean_df)
         
         elapsed = time.time() - start_time
@@ -49,7 +56,7 @@ def run_pipeline(target_month: str = None):
         print("!"*60 + "\n")
         raise e
 
-
+# Command Line Interface (CLI) execution block
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Traffy Fondue ETL Pipeline Automator")
     parser.add_argument(

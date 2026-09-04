@@ -3,11 +3,19 @@ from sqlalchemy import text
 from scripts.db import engine
 
 def load_dimensions(df: pd.DataFrame) -> tuple[dict, dict, dict]:
-
+    """
+    Perform idempotent upsert loading into Dimension tables and return ID lookup maps.
+    
+    Args:
+        df (pd.DataFrame): Cleaned dataset containing dimension attributes.
+        
+    Returns:
+        tuple[dict, dict, dict]: Lookup dictionaries for type_map, loc_map, and org_map.
+    """
     print("Loading Dimensions...")
     
     with engine.begin() as conn:
-        # 1. dim_problem_type
+        # 1. Populate dim_problem_type
         types_df = df[['type', 'main_category', 'sub_category', 'detail_category']].drop_duplicates(subset=['type'])
         for _, row in types_df.iterrows():
             conn.execute(
@@ -24,7 +32,7 @@ def load_dimensions(df: pd.DataFrame) -> tuple[dict, dict, dict]:
                 }
             )
             
-        # 2. dim_location
+        # 2. Populate dim_location
         loc_df = df[['subdistrict', 'district', 'province']].drop_duplicates()
         for _, row in loc_df.iterrows():
             conn.execute(
@@ -40,7 +48,7 @@ def load_dimensions(df: pd.DataFrame) -> tuple[dict, dict, dict]:
                 }
             )
             
-        # 3. dim_organizations
+        # 3. Populate dim_organizations
         all_orgs = set(df['primary_org'].dropna().unique()) | set(df['latest_action_org'].dropna().unique())
         for org in all_orgs:
             if org and org != "Not specified":
@@ -49,7 +57,7 @@ def load_dimensions(df: pd.DataFrame) -> tuple[dict, dict, dict]:
                     {"org": org}
                 )
                 
-    # ID Mapping
+    # Build In-Memory ID Mapping Dictionaries
     type_map = pd.read_sql("SELECT full_type, type_id FROM dim_problem_type", engine).set_index('full_type')['type_id'].to_dict()
     loc_map = pd.read_sql("SELECT subdistrict, district, province, location_id FROM dim_location", engine).set_index(['subdistrict', 'district', 'province'])['location_id'].to_dict()
     org_map = pd.read_sql("SELECT org_name, org_id FROM dim_organizations", engine).set_index('org_name')['org_id'].to_dict()
@@ -58,22 +66,31 @@ def load_dimensions(df: pd.DataFrame) -> tuple[dict, dict, dict]:
     return type_map, loc_map, org_map
 
 def load_fact_tickets(df: pd.DataFrame, type_map: dict, loc_map: dict, org_map: dict):
+    """
+    Load ticket records into fact_tickets using Staging Table + SQL UPSERT pattern.
+    
+    Args:
+        df (pd.DataFrame): Cleaned dataset.
+        type_map (dict): full_type -> type_id lookup map.
+        loc_map (dict): (subdistrict, district, province) -> location_id lookup map.
+        org_map (dict): org_name -> org_id lookup map.
+    """
     print("Loading Fact Tickets...")
     fact_df = df.copy()
     
-    # 1. Map Foreign Keys
+    # 1. Map Foreign Key Surrogate Keys
     fact_df['type_id'] = fact_df['type'].map(type_map)
     fact_df['location_id'] = fact_df.apply(lambda r: loc_map.get((r['subdistrict'], r['district'], r['province'])), axis=1)
     fact_df['primary_org_id'] = fact_df['primary_org'].map(org_map)
     fact_df['latest_action_org_id'] = fact_df['latest_action_org'].map(org_map)
     
-    # 2. Adjust the column names to match the database
+    # 2. Rename columns to match PostgreSQL target schema
     fact_df = fact_df.rename(columns={
         'photo': 'photo_url',
         'photo_after': 'photo_after_url'
     })
     
-    # 3. Select only the columns that exist in the table fact_tickets
+    # 3. Select target schema columns
     cols_to_load = [
         'ticket_id', 'message_id', 'type_id', 'location_id', 'state', 'tags',
         'star', 'count_reopen', 'is_internal_rework', 'comment', 'address',
@@ -83,13 +100,13 @@ def load_fact_tickets(df: pd.DataFrame, type_map: dict, loc_map: dict, org_map: 
         'primary_org_id', 'latest_action_org_id', 'org_count'
     ]
     
-    # If tags is not exist -> fill None
+    # Ensure tags column presence
     if 'tags' not in fact_df.columns:
         fact_df['tags'] = None
         
     final_df = fact_df[cols_to_load]
     
-    # 4. Load to temporary staging table
+    # 4. Load records into temporary staging table
     final_df.to_sql(
         name='staging_tickets',
         con=engine,
@@ -99,7 +116,7 @@ def load_fact_tickets(df: pd.DataFrame, type_map: dict, loc_map: dict, org_map: 
         method='multi'
     )
     
-    # 5. Execute SQL UPSERT from staging into fact_tickets
+    # 5. Execute SQL UPSERT from staging table to fact_tickets
     upsert_sql = """
         INSERT INTO fact_tickets (
             ticket_id, message_id, type_id, location_id, state, tags,
@@ -123,54 +140,68 @@ def load_fact_tickets(df: pd.DataFrame, type_map: dict, loc_map: dict, org_map: 
             star = EXCLUDED.star,
             count_reopen = EXCLUDED.count_reopen,
             is_internal_rework = EXCLUDED.is_internal_rework,
+            comment = EXCLUDED.comment,
+            address = EXCLUDED.address,
+            longitude = EXCLUDED.longitude,
+            latitude = EXCLUDED.latitude,
+            photo_url = EXCLUDED.photo_url,
             photo_after_url = EXCLUDED.photo_after_url,
+            timestamp = EXCLUDED.timestamp,
             timestamp_inprogress = EXCLUDED.timestamp_inprogress,
             timestamp_finished = EXCLUDED.timestamp_finished,
             last_activity = EXCLUDED.last_activity,
             duration_minutes_total = EXCLUDED.duration_minutes_total,
             calculated_from_start = EXCLUDED.calculated_from_start,
             calculated_from_inprogress = EXCLUDED.calculated_from_inprogress,
+            primary_org_id = EXCLUDED.primary_org_id,
             latest_action_org_id = EXCLUDED.latest_action_org_id,
             org_count = EXCLUDED.org_count;
 
-        -- Clean up staging table
         DROP TABLE IF EXISTS staging_tickets;
     """
-
+    
     with engine.begin() as conn:
         conn.execute(text(upsert_sql))
-
+        
     print(f"Upserted {len(final_df):,} records into 'fact_tickets' successfully!")
 
 def load_ticket_organizations(df: pd.DataFrame, org_map: dict):
-    print("Loading Ticket Organizations (Bridge Table)...")
+    """
+    Parse multi-organization assignments and load into ticket_organizations Bridge Table.
     
+    Args:
+        df (pd.DataFrame): Cleaned dataset.
+        org_map (dict): org_name -> org_id lookup map.
+    """
+    print("Loading Bridge Table: ticket_organizations...")
     records = []
-    for _, row in df[['ticket_id', 'organization', 'latest_action_org']].iterrows():
+    
+    for _, row in df.iterrows():
+        ticket_id = row['ticket_id']
         org_str = row['organization']
-        if pd.isna(org_str) or not str(org_str).strip():
-            continue
-            
-        org_names = [o.strip() for o in str(org_str).split(',') if o.strip()]
+        latest_org = row['latest_action_org']
         
-        seen_orgs = set()
-        for seq, org_name in enumerate(org_names, start=1):
-            org_id = org_map.get(org_name)
-            if org_id and (org_id not in seen_orgs):
-                seen_orgs.add(org_id)
-                records.append({
-                    'ticket_id': row['ticket_id'],
-                    'org_id': org_id,
-                    'sequence_order': seq,
-                    'is_primary': (seq == 1),
-                    'is_latest_actor': (org_name == row['latest_action_org'])
-                })
-                
+        if pd.notna(org_str) and org_str:
+            org_list = [o.strip() for o in org_str.split(',') if o.strip() and o.strip() != "Not specified"]
+            
+            for idx, org_name in enumerate(org_list):
+                org_id = org_map.get(org_name)
+                if org_id:
+                    records.append({
+                        'ticket_id': ticket_id,
+                        'org_id': org_id,
+                        'sequence_order': idx + 1,
+                        'is_primary': (idx == 0),
+                        'is_latest_actor': (org_name == latest_org)
+                    })
+                    
     if not records:
         print("No ticket organizations to load.")
         return
+        
     bridge_df = pd.DataFrame(records)
     
+    # Load into staging table and execute UPSERT
     bridge_df.to_sql(
         name='staging_ticket_orgs',
         con=engine,
@@ -196,12 +227,14 @@ def load_ticket_organizations(df: pd.DataFrame, org_map: dict):
         conn.execute(text(upsert_bridge_sql))
         
     print(f"Loaded {len(bridge_df):,} records into 'ticket_organizations' successfully!")
-    
+
 def load_traffy_data(df: pd.DataFrame):
+    """Orchestrate loading sequence for dimensions, fact table, and bridge table."""
     type_map, loc_map, org_map = load_dimensions(df)
     load_fact_tickets(df, type_map, loc_map, org_map)
     load_ticket_organizations(df, org_map)
 
+# Local module testing block
 if __name__ == "__main__":
     from scripts.extract import extract_traffy_data
     from scripts.transform import transform_traffy_data
