@@ -94,12 +94,18 @@ traffy-fondue-etl-pipeline/
    * Utilizes a **Temporary Staging Table (`staging_tickets`) + SQL `UPSERT` (`ON CONFLICT (ticket_id) DO UPDATE`)** to insert new records and update changing issue statuses without primary key violations.
    * Populates the Bridge Table (`ticket_organizations`) to capture many-to-many relationships between tickets and assigned agencies.
 
-4. **Orchestration (`dags/etl_dag.py`):**
-   * Scheduled via **Apache Airflow** using `@monthly` cron intervals.
+4. **Orchestration & Scheduling (`dags/etl_dag.py`):**
+   * Scheduled via **Apache Airflow** using `@monthly` cron intervals (runs automatically on the 1st of every month).
+   * **Dynamic Target Month Resolution:** If no manual parameter is passed, the pipeline dynamically calculates `Target Month = Current Month - 1` (e.g., executing on Sept 1 automatically extracts completed August data).
+   * **Fault Tolerance & Catch-Up:** In case the host machine or container is offline on the 1st of the month, Airflow's state engine detects the unexecuted schedule upon container startup and automatically triggers a catch-up run without data loss.
    * Configured with automated retry logic (`retries=1`, `retry_delay=5m`) and state validation tasks.
 
 5. **Analytics & Presentation (`dashboard/app.py`):**
-   * Built with **Streamlit** and **Plotly Express**, allowing users to explore all Star Schema tables dynamically, filter issues, and inspect state distributions.
+   * Built with **Streamlit** and **Plotly Express**, structured into two primary analytical layers:
+     * **Visualization Summary Section:** High-level KPI metric cards (Total Cases, Completed, In-Progress, Pending), a Plotly Donut Chart showing issue state distributions, and a Horizontal Bar Chart ranking Top 10 Districts by ticket volume.
+     * **Star Schema Data Explorer:** Interactive dataset selector allowing users to inspect raw records from `fact_tickets`, `dim_problem_type`, `dim_location`, `dim_organizations`, and `ticket_organizations`.
+
+   ![Traffy Fondue Analytics Dashboard](fig/image.png)
 
 ---
 
