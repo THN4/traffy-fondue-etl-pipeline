@@ -142,7 +142,7 @@ To optimize analytical queries and dashboard performance, the database is struct
                                                | 1
                                                |
                                                | N
-        +--------------------+     |     +-------------------------+     1     +------------------+
+        +--------------------+           +-------------------------+     1     +------------------+
         |    dim_location    |-----+----->      fact_tickets       |<----------| dim_organizations|
         +--------------------+     |     +-------------------------+           +------------------+
         | PK  location_id    |     |     | PK  type_id             |           | PK  org_id       |
