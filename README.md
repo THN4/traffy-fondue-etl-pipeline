@@ -1,4 +1,4 @@
-# Traffy Fondue End-to-End Automated Data Pipeline
+# Traffy Fondue ETL Pipeline
 
 An enterprise-grade, automated Data Engineering pipeline designed to extract, clean, model, load, and visualize public municipal issue data from Bangkok's **Traffy Fondue** platform.
 
